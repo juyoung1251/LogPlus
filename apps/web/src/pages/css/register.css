@@ -1,0 +1,103 @@
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #111925;
+  padding: 24px;
+}
+
+.registerCard {
+  width: 100%;
+  max-width: 410px;
+  padding: 2rem 2.3rem;
+  background: #18243a;
+  border: 1px solid #1c2b3e;
+  border-radius: 9px;
+}
+
+.title {
+  margin-bottom: 1.5rem;
+  text-align: center;
+  color: #edf2fa;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.inputGroup {
+  margin-bottom: 0.9rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.inputGroup label {
+  margin-bottom: 0.36rem;
+  font-size: 0.76rem;
+  color: #8ca0b8;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.inputGroup input {
+  padding: 0.64rem 0.85rem;
+  background: #0c1422;
+  border: 1px solid #243448;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  color: #c6d4e3;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.inputGroup input::placeholder {
+  color: #5e7288;
+}
+
+.inputGroup input:focus {
+  border-color: #6652a8;
+}
+
+.registerButton {
+  width: 100%;
+  padding: 0.72rem;
+  background-color: #6652a8;
+  color: #e8e0f8;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: background-color 0.15s;
+}
+
+.registerButton:hover {
+  background-color: #7864bc;
+}
+
+.footer {
+  margin-top: 1.2rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #5e7288;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  color: #9080d0;
+  margin-left: 0.4rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: inherit;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.linkButton:hover {
+  color: #b0a0e8;
+  text-decoration: underline;
+}

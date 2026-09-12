@@ -1,0 +1,102 @@
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #111925;
+}
+
+.loginCard {
+  width: 100%;
+  max-width: 370px;
+  padding: 2.2rem 2.3rem;
+  background: #18243a;
+  border: 1px solid #1c2b3e;
+  border-radius: 9px;
+}
+
+.title {
+  margin-bottom: 1.8rem;
+  text-align: center;
+  color: #edf2fa;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.inputGroup {
+  margin-bottom: 1.1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.inputGroup label {
+  margin-bottom: 0.38rem;
+  font-size: 0.76rem;
+  color: #8ca0b8;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.inputGroup input {
+  padding: 0.68rem 0.85rem;
+  background: #0c1422;
+  border: 1px solid #243448;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  color: #c6d4e3;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.inputGroup input::placeholder {
+  color: #5e7288;
+}
+
+.inputGroup input:focus {
+  border-color: #6652a8;
+}
+
+.loginButton {
+  width: 100%;
+  padding: 0.72rem;
+  background-color: #6652a8;
+  color: #e8e0f8;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.3rem;
+  transition: background-color 0.15s;
+}
+
+.loginButton:hover {
+  background-color: #7864bc;
+}
+
+.footer {
+  margin-top: 1.4rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #5e7288;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  color: #9080d0;
+  margin-left: 0.4rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: inherit;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.linkButton:hover {
+  color: #b0a0e8;
+  text-decoration: underline;
+}

@@ -1,0 +1,5 @@
+fastapi==0.128.8
+pymysql==2.2.8
+requests==2.25.1
+sqlalchemy==2.0.49
+uvicorn==0.39.0

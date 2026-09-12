@@ -1,0 +1,15 @@
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #161424;
+  color: #c6d4e3;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+h2 {
+  color: #edf2fa;
+  font-weight: 600;
+  font-size: 1.3rem;
+}

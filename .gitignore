@@ -1,0 +1,29 @@
+# Dependencies and build outputs
+**/node_modules/
+**/dist/
+**/.vite/
+**/__pycache__/
+*.py[cod]
+
+# Runtime data
+logs/
+projects/
+runtime/
+infra/n8n/builds/
+*.log
+*.pid
+*.sw?
+
+# Secrets and local tool state
+.env
+.env.*
+!.env.example
+.claude/
+.codex/
+.cursor/
+.agents/
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
