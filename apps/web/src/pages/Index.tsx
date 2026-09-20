@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import "./css/index.css";
 import useUserStore from "../store/store";
@@ -30,6 +30,77 @@ interface Alert {
   message: string;
   time: string;
 }
+// ── 날짜 범위 프리셋 ────────────────────────────────────────────────────────
+type RangePresetKey =
+  | "all" | "1h" | "6h" | "today" | "yesterday" | "1d" | "3d" | "1w" | "1m" | "custom";
+
+const RANGE_PRESETS: { key: RangePresetKey; label: string }[] = [
+  { key: "all",       label: "전체 기간" },
+  { key: "1h",        label: "최근 1시간" },
+  { key: "6h",        label: "최근 6시간" },
+  { key: "today",     label: "오늘" },
+  { key: "yesterday", label: "어제" },
+  { key: "1d",        label: "하루 전" },
+  { key: "3d",        label: "3일 전" },
+  { key: "1w",        label: "일주일 전" },
+  { key: "1m",        label: "한 달 전" },
+  { key: "custom",    label: "사용자 정의" },
+];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const fmtDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtInput = (d: Date) => `${fmtDate(d)}T${fmtTime(d)}`;
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const parseInput = (value: string, fallback: Date) => {
+  const d = new Date(value);
+  return value && !Number.isNaN(d.getTime()) ? d : fallback;
+};
+
+/** 종료 시각은 항상 "지금". 시작 시각만 프리셋에 따라 뒤로 이동한다. */
+function resolveRange(
+  preset: RangePresetKey,
+  now: Date,
+  customFrom: string,
+  customTo: string
+): { from: Date; to: Date } {
+  const to = new Date(now);
+  const from = new Date(now);
+
+  switch (preset) {
+    case "all":
+      // 시작 시각 제한 없음 — 종료는 다른 프리셋과 똑같이 "지금"
+      return { from: new Date(0), to };
+    case "1h": from.setHours(from.getHours() - 1); break;
+    case "6h": from.setHours(from.getHours() - 6); break;
+    case "1d": from.setDate(from.getDate() - 1); break;
+    case "3d": from.setDate(from.getDate() - 3); break;
+    case "1w": from.setDate(from.getDate() - 7); break;
+    case "1m": from.setMonth(from.getMonth() - 1); break;
+    case "today":
+      return { from: startOfDay(now), to };
+    case "yesterday": {
+      const start = startOfDay(now);
+      start.setDate(start.getDate() - 1);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { from: start, to: end };
+    }
+    case "custom":
+      return {
+        from: parseInput(customFrom, startOfDay(now)),
+        to: parseInput(customTo, to),
+      };
+  }
+  return { from, to };
+}
+
+function formatRange(from: Date, to: Date) {
+  return fmtDate(from) === fmtDate(to)
+    ? `${fmtDate(from)} ${fmtTime(from)} ~ ${fmtTime(to)}`
+    : `${fmtDate(from)} ${fmtTime(from)} ~ ${fmtDate(to)} ${fmtTime(to)}`;
+}
+
 const Index = () => {
   const navigate = useNavigate();
   const userInfo = useUserStore(s => s.userInfo);
@@ -147,7 +218,12 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
   const [activeNav, setActiveNav] = useState("대시보드");
-  const [quickFilter, setQuickFilter] = useState("오늘");
+  const [rangePreset, setRangePreset] = useState<RangePresetKey>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [now, setNow] = useState<Date>(() => new Date());
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement | null>(null);
   const [search, setSearch] = useState("");
   const [aiAnalysisVisible, setAiAnalysisVisible] = useState(true);
   const [logFileList, setLogFileList] = useState<LogFileItem[]>([]);
@@ -155,6 +231,53 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
   const [selectValue, setSelectValue] = useState("default");
   const [aiAnalysis, setAiAnalysis] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // 현재 시각을 매초 갱신 — 날짜 범위의 끝은 항상 "지금"
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // 필터 드롭다운: 바깥 클릭 / ESC 로 닫기
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFilterOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [filterOpen]);
+
+  const { from: rangeFrom, to: rangeTo } = useMemo(
+    () => resolveRange(rangePreset, now, customFrom, customTo),
+    [rangePreset, now, customFrom, customTo]
+  );
+  const rangeLabel = RANGE_PRESETS.find((p) => p.key === rangePreset)?.label ?? "전체 기간";
+  const rangeText =
+    rangePreset === "all"
+      ? `전체 기간 ~ ${fmtDate(rangeTo)} ${fmtTime(rangeTo)}`
+      : formatRange(rangeFrom, rangeTo);
+
+  const applyPreset = (key: RangePresetKey) => {
+    if (key === "custom") {
+      // 사용자 정의로 전환할 때 현재 범위를 입력값 초기치로 채워준다
+      if (!customFrom) setCustomFrom(fmtInput(rangeFrom));
+      if (!customTo) setCustomTo(fmtInput(rangeTo));
+      setRangePreset("custom");
+      return;
+    }
+    setRangePreset(key);
+    setFilterOpen(false);
+  };
 
   const toggleFilter = (level: LogLevel) => {
     setActiveFilters((prev) =>
@@ -274,6 +397,15 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
     await fetchLogContent(Number(value));
   }
 
+  const visibleLogFiles = useMemo(
+    () =>
+      logFileList.filter((log) => {
+        const t = new Date(log.created_at).getTime();
+        return Number.isNaN(t) || (t >= rangeFrom.getTime() && t <= rangeTo.getTime());
+      }),
+    [logFileList, rangeFrom, rangeTo]
+  );
+
   const logLines = useMemo(() => (selectedLog?.log_content ?? "").split(/\r\n|\n|\r/).map((text) => {
     const token = text.match(/\b(ERROR|WARN(?:ING)?|INFO|DEBUG)\b/i)?.[1].toUpperCase();
     const level = token === "WARNING" ? "WARN" : token as LogLevel | undefined;
@@ -344,7 +476,12 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
             onChange={(e) => selectChange(e.target.value)}
           >
             <option value="default">선택</option>
-            {logFileList.map((log) => (
+            {logFileList.length > 0 && visibleLogFiles.length === 0 && (
+              <option value="__out_of_range" disabled>
+                {rangeLabel} 범위에 로그 없음 · 전체 {logFileList.length}건 (필터에서 기간을 넓히세요)
+              </option>
+            )}
+            {visibleLogFiles.map((log) => (
               <option key={log.build_log_id} value={String(log.build_log_id)}>
                 [{log.log_type}] {new Date(log.created_at).toLocaleString()}
               </option>
@@ -392,13 +529,69 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
             className="topbar-search"
           />
 
-          {/* Date range */}
-          <div className="topbar-daterange">
-            2026-04-08 00:00 ~ 23:59
+          {/* Date range — 항상 현재 시각 기준 */}
+          <div className="topbar-daterange" title="선택한 기간 (종료 시각은 항상 현재 시각)">
+            {rangeText}
           </div>
 
           {/* Filter btn */}
-          <button className="topbar-filter-btn">필터</button>
+          <div className="topbar-filter-wrap" ref={filterRef}>
+            <button
+              className="topbar-filter-btn"
+              onClick={() => setFilterOpen((v) => !v)}
+              aria-haspopup="true"
+              aria-expanded={filterOpen}
+            >
+              필터 · {rangeLabel}
+            </button>
+
+            {filterOpen && (
+              <div className="date-filter-menu" role="menu">
+                <div className="date-filter-menu-title">기간 선택</div>
+                {RANGE_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    role="menuitemradio"
+                    aria-checked={rangePreset === p.key}
+                    className={`date-filter-option ${rangePreset === p.key ? "active" : ""}`}
+                    onClick={() => applyPreset(p.key)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+
+                {rangePreset === "custom" && (
+                  <div className="date-filter-custom">
+                    <label className="date-filter-field">
+                      시작
+                      <input
+                        type="datetime-local"
+                        value={customFrom}
+                        max={customTo || undefined}
+                        onChange={(e) => setCustomFrom(e.target.value)}
+                      />
+                    </label>
+                    <label className="date-filter-field">
+                      종료
+                      <input
+                        type="datetime-local"
+                        value={customTo}
+                        min={customFrom || undefined}
+                        onChange={(e) => setCustomTo(e.target.value)}
+                      />
+                    </label>
+                    <button className="date-filter-apply" onClick={() => setFilterOpen(false)}>
+                      적용
+                    </button>
+                  </div>
+                )}
+
+                <div className="date-filter-menu-foot">
+                  현재 시각 {fmtDate(now)} {fmtTime(now)}:{pad(now.getSeconds())}
+                </div>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* ── Body ── */}
@@ -491,14 +684,17 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
             {/* Quick filters */}
             <div className="quick-filters">
               <span className="quick-filter-label">빠른 필터:</span>
-              {["오늘", "어제", "최근 1시간", "최근 6시간", "사용자 정의"].map((f) => (
+              {RANGE_PRESETS.map((p) => (
                 <button
-                  key={f}
-                  onClick={() => setQuickFilter(f)}
-                  className={`quick-filter-btn ${quickFilter === f ? "active" : "inactive"}`}
-                  style={quickFilter !== f ? { border: `1px solid ${border}` } : undefined}
+                  key={p.key}
+                  onClick={() => {
+                    applyPreset(p.key);
+                    if (p.key === "custom") setFilterOpen(true);
+                  }}
+                  className={`quick-filter-btn ${rangePreset === p.key ? "active" : "inactive"}`}
+                  style={rangePreset !== p.key ? { border: `1px solid ${border}` } : undefined}
                 >
-                  {f}
+                  {p.label}
                 </button>
               ))}
             </div>

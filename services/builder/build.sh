@@ -4,34 +4,39 @@
 # LogPlus 자동 빌드 및 실행 스크립트 (멀티 언어 + Docker)
 # 지원 언어: Python / Node.js / Java (Maven, Gradle) / C / C++
 #
-# 사용법: bash build.sh <user_id> <team_id> <username>
-# 예시:   bash build.sh test1 test_project test1
+# 사용법: bash build.sh <user_id> <team_id>
+# 예시:   bash build.sh test1 test_project
 # =============================================
 
 # ── 인자 수신 ──
 USERS_ID=$1
 TEAM_ID=$2
-USERNAME=$3
 
 # post-receive가 넘기는 bare-repo Git 환경이 작업본 명령에 영향을 주지 않게 한다.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
 unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 
 # ── 인자 검증 ──
-if [ -z "$USERS_ID" ] || [ -z "$TEAM_ID" ] || [ -z "$USERNAME" ]; then
+if [ -z "$USERS_ID" ] || [ -z "$TEAM_ID" ]; then
     exit 1
 fi
+
+# ── 운영 경로 ──
+PLATFORM_ROOT="/app/logplus-platform"
+APP_LOG_ROOT="${APP_LOG_ROOT:-/app/logs}"
+USER_LOG_ROOT="${USER_LOG_ROOT:-$PLATFORM_ROOT/logs}"
+PROJECT_ROOT="${PROJECT_ROOT:-$PLATFORM_ROOT/projects}"
 
 # ── 내부 bare repo 경로 ──
 BARE_REPO="/repos/${TEAM_ID}/${USERS_ID}.git"
 
 # ── 전체 빌드 로그 (모든 단계 기록) ──
-BUILDER_LOG=/app/logplus/builder/builder.log
-mkdir -p /app/logplus/builder
+BUILDER_LOG="$APP_LOG_ROOT/builder/builder.log"
+mkdir -p "$(dirname "$BUILDER_LOG")"
 
 # ── 경로 설정 ──
-PROJECT_DIR=/app/logplus/projects/$TEAM_ID/$USERS_ID
-LOG_DIR=/app/logplus/logs/$TEAM_ID/$USERS_ID
+PROJECT_DIR="$PROJECT_ROOT/$TEAM_ID/$USERS_ID"
+LOG_DIR="$USER_LOG_ROOT/$TEAM_ID/$USERS_ID"
 TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
 RUN_LOG=$LOG_DIR/${TIMESTAMP}_RUN.log
 LIB_INSTALL_LOG=$LOG_DIR/${TIMESTAMP}_LIB.log
@@ -42,7 +47,7 @@ FASTAPI_URL="http://localhost:8000/logs"
 # ── 로그 저장 폴더 생성 ──
 mkdir -p $LOG_DIR
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] [START] users_id=$USERS_ID, team_id=$TEAM_ID, username=$USERNAME" >> $BUILDER_LOG
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [START] users_id=$USERS_ID, team_id=$TEAM_ID" >> $BUILDER_LOG
 
 # =============================================
 # 1. 레포지토리 clone or pull
@@ -74,7 +79,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] [STEP 2] Dockerfile 확인 시작" >> $BUIL
 
 BUILD_STATUS=0
 RUN_STATUS=0
-DOCKER_IMAGE="${USERNAME}-${TEAM_ID}"
+DOCKER_IMAGE="${USERS_ID}-${TEAM_ID}"
 
 if [ -f "$PROJECT_DIR/Dockerfile" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [STEP 2] Dockerfile 감지 — 해당 파일로 빌드 진행" >> $BUILDER_LOG

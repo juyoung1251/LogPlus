@@ -1,17 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
-from database import get_db, UserTable
+from database import get_db, TeamTable, UserTable
 import os
 import re
+import shlex
 import subprocess
 
 router = APIRouter()
 
 class RegisterInput(BaseModel): # 회원가입 요청 데이터
     users_id: str
-    username: str
     password: str
     team_id: str
     role: str
@@ -28,9 +29,15 @@ def register_user(userData: RegisterInput, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
 
+    existing_team = db.query(TeamTable).filter(TeamTable.team_id == userData.team_id).first()
+    if existing_team is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"존재하지 않는 팀입니다: {userData.team_id}. 등록된 team_id를 입력하세요.",
+        )
+
     new_user = UserTable(
         users_id=userData.users_id,
-        username=userData.username,
         password=userData.password,
         team_id=userData.team_id,
         role=userData.role,
@@ -41,7 +48,11 @@ def register_user(userData: RegisterInput, db: Session = Depends(get_db)):
         db.add(new_user)
         db.flush()
 
-        project_dir = f"/app/logplus/projects/{userData.team_id}/{userData.users_id}"
+        project_root = os.getenv("PROJECT_ROOT", "/app/logplus-platform/projects")
+        builder_script = os.getenv(
+            "BUILDER_SCRIPT", "/app/logplus-platform/services/builder/build.sh"
+        )
+        project_dir = os.path.join(project_root, userData.team_id, userData.users_id)
         os.makedirs(project_dir, exist_ok=True)
 
         bare_repo = f"/repos/{userData.team_id}/{userData.users_id}.git"
@@ -55,7 +66,8 @@ def register_user(userData: RegisterInput, db: Session = Depends(get_db)):
         hook_content = (
             "#!/bin/bash\n"
             "while read oldrev newrev ref; do\n"
-            f'    bash /app/logplus/builder/build.sh "{userData.users_id}" "{userData.team_id}" "{userData.username}"\n'
+            f'    bash {shlex.quote(builder_script)} '
+            f'"{userData.users_id}" "{userData.team_id}"\n'
             "done\n"
         )
         hook_path = f"{bare_repo}/hooks/post-receive"
@@ -64,6 +76,14 @@ def register_user(userData: RegisterInput, db: Session = Depends(get_db)):
         os.chmod(hook_path, 0o755)
         db.commit()
 
+    except IntegrityError as e:
+        db.rollback()
+        if "users_teams_FK" in str(e):
+            raise HTTPException(
+                status_code=400,
+                detail=f"존재하지 않는 팀입니다: {userData.team_id}. 등록된 team_id를 입력하세요.",
+            ) from e
+        raise HTTPException(status_code=500, detail="회원가입 중 데이터베이스 오류가 발생했습니다.") from e
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"회원가입 중 오류가 발생했습니다: {str(e)}")

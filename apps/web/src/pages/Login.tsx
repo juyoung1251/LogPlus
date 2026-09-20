@@ -12,24 +12,28 @@ const LoginPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const response = await axios.post(`${API_BASE_URL}/user/login`, { users_id: userId, password: password });
-    const data = response.data;
 
-    if(data) {
-      if(data.status === "fail") {
-        alert(`${data.message}`);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/user/login`, { users_id: userId, password: password });
+      const data = response.data;
+
+      if(data) {
+        if(data.status === "fail") {
+          alert(`${data.message}`);
+        }
+        else {
+          const user_id = data.user_info.users_id;
+          const team_id = data.user_info.team_id;
+
+          useUserStore.getState().setUserInfo(user_id, team_id);
+
+          alert("로그인 성공! 홈으로 이동합니다.");
+          navigate("/index");
+        }
       }
-      else {
-        const user_id = data.user_info.users_id;
-        const username = data.user_info.username;
-        const team_id = data.user_info.team_id;
-
-        useUserStore.getState().setUserInfo(user_id, username, team_id);
-
-        alert("로그인 성공! 홈으로 이동합니다.");
-        navigate("/index");
-      }
+    } catch (error) {
+      console.error("로그인 API 호출 실패", { api: API_BASE_URL, error });
+      alert(`로그인 서버에 연결할 수 없습니다.\nAPI: ${API_BASE_URL}`);
     }
   };
 

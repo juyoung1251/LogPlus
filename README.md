@@ -24,4 +24,4 @@ GitHub 배포용 소스 구조입니다. 운영 데이터와 도구 설치 파�
 
 ## Production note
 
-현재 운영 배치 경로는 `/app/logplus`입니다. 이 저장소의 디렉터리 구조는 소스 관리용이므로, 운영 경로를 바꾸려면 systemd 유닛, Git hook, builder 설정을 함께 변경해야 합니다.
+현재 운영 기준 경로는 `/app/logplus-platform`이며, 실행 로그는 `/app/logplus-platform/logs` 아래에 모읍니다. `/repos`, MariaDB 데이터, Docker 이미지·볼륨은 프로젝트 외부 운영 데이터로 관리합니다.

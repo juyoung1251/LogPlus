@@ -11,7 +11,7 @@ const UserPage: React.FC = () => {
   return (
     <div className="container">
         {userInfo && (
-            <h2>{`안녕하세요 ${userInfo.userName}님`}</h2>
+            <h2>{`안녕하세요 ${userInfo.userId}님`}</h2>
         )}
     </div>
   );

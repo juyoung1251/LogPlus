@@ -245,6 +245,7 @@
 /* 날짜 범위 */
 .topbar-daterange {
   display: flex;
+  font-variant-numeric: tabular-nums;
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
@@ -277,6 +278,122 @@
 .topbar-filter-btn:hover {
   color: var(--text-primary);
   border-color: var(--accent);
+}
+
+/* 날짜 필터 드롭다운 */
+.topbar-filter-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.date-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 190px;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-medium);
+  border-radius: 7px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
+
+.date-filter-menu-title {
+  padding: 4px 8px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.date-filter-option {
+  display: block;
+  width: 100%;
+  padding: 6px 9px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.date-filter-option:hover {
+  background: var(--bg-card);
+}
+
+.date-filter-option.active {
+  background: var(--accent-light);
+  border: 1px solid var(--accent-border);
+  color: var(--text-bright);
+  font-weight: 600;
+  padding: 5px 8px;
+}
+
+.date-filter-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.date-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.date-filter-field input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+  color-scheme: dark;
+}
+
+.date-filter-field input:focus {
+  border-color: var(--accent);
+}
+
+.date-filter-apply {
+  padding: 5px 9px;
+  background: var(--accent);
+  border: none;
+  border-radius: 5px;
+  color: #f3f0fb;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.date-filter-apply:hover {
+  background: var(--accent-hover);
+}
+
+.date-filter-menu-foot {
+  margin-top: 6px;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Body ────────────────────────────────────────────────────────────────── */
@@ -508,6 +625,7 @@
 
 /* ── Quick filters ───────────────────────────────────────────────────────── */
 .quick-filters {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 7px;

@@ -29,10 +29,9 @@ def login_user(userData: LoginInput, db: Session = Depends(get_db)):
 
     return {
             "status": "success", 
-            "message": f"{user.username}님 환영합니다!",
+            "message": f"{user.users_id}님 환영합니다!",
             "user_info": {
                 "users_id": user.users_id,
-                "username": user.username,
                 "team_id" : user.team_id,
                 }
             }

@@ -1,7 +1,7 @@
 # LogPlus Platform 구조 설계서
 
 기준: GitHub용 소스 트리 `logplus-platform/`  
-운영 원본: `/app/logplus` (이 문서 생성 과정에서 수정·삭제하지 않음)
+운영 기준 경로: `/app/logplus-platform`
 
 이 문서는 운영 원본의 `STRUCTURE.md`를 기준으로, 공개 저장소에 포함할 수 있는 소스 구조와 실제 운영 배치를 구분해 재구성했다. 내부 주소, 실제 자격증명, 로그·DB·사용자 작업본은 기록하지 않는다.
 
@@ -67,7 +67,7 @@ logplus-platform/
 
 ## 3. 운영 원본에서의 매핑
 
-| 운영 원본 `/app/logplus` | GitHub 소스 | 포함 여부 |
+| 운영 기준 `/app/logplus-platform` | GitHub 소스 | 포함 여부 |
 | --- | --- | --- |
 | `ReactProject/` | `apps/web/` | 포함, `node_modules` 제외 |
 | `api/` | `apps/api/` | 포함, 로그·PID·캐시 제외 |
@@ -115,18 +115,18 @@ logplus-platform/
 
 ## 6. 운영 배치 주의
 
-현재 운영 스크립트와 systemd/Git hook은 `/app/logplus` 경로를 사용한다. 이 저장소는 소스 관리용 구조이므로, `apps/` 등의 새 경로를 운영에 직접 적용하려면 다음을 하나의 배포 변경으로 함께 수정해야 한다.
+현재 운영 스크립트와 systemd/Git hook은 `/app/logplus-platform` 경로를 사용한다. 실행 로그는 `/app/logplus-platform/logs` 아래에 저장하고, 프로젝트 작업본은 `/app/logplus-platform/projects` 아래에 둔다.
 
 - API systemd `WorkingDirectory`와 `ExecStart`
 - post-receive hook의 builder 호출 경로
 - builder의 작업본·로그·런타임 경로
 - Nginx와 n8n 배포 파일의 참조
 
-따라서 현재 단계에서는 운영 원본을 그대로 유지하고, 이 저장소만 GitHub에 올린 뒤 별도 배포 작업에서 운영 경로 전환을 검증한다.
+따라서 로그·작업본·런타임 데이터는 Git에 포함하지 않고, 배포 시 해당 디렉터리를 별도로 생성한다.
 
 ## 7. 현재 진행 상태
 
-- [x] 운영 원본 `/app/logplus` 보존
+- [x] 운영 기준 경로 `/app/logplus-platform` 정리
 - [x] GitHub용 분리 트리 생성
 - [x] 의존성·로그·작업본·런타임·기존 Git 이력 제외
 - [x] DB/n8n 실제 비밀값을 환경변수 예시로 대체

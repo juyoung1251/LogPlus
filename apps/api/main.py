@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
@@ -51,9 +52,11 @@ def health_check():
 
 @app.post("/logs")
 def save_log(log: LogInput, db: Session = Depends(get_db)):
-    log_root = Path("/app/logplus/logs").resolve()
+    user_log_root = Path(
+        os.getenv("USER_LOG_ROOT", "/app/logplus-platform/logs")
+    ).resolve()
     log_path = Path(log.log_path).resolve()
-    expected_dir = (log_root / log.team_id / log.users_id).resolve()
+    expected_dir = (user_log_root / log.team_id / log.users_id).resolve()
 
     if log_path.parent != expected_dir or not log_path.is_file():
         raise HTTPException(status_code=400, detail="유효한 로그 파일 경로가 아닙니다.")

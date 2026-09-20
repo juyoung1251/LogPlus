@@ -10,11 +10,10 @@ const RegisterPage: React.FC = () => {
     userId: '',
     password: '',
     confirmPassword: '',
-    userName: '',
     team_id: '',
   });
 
-  const { userId, password, confirmPassword, userName, team_id } = formData;
+  const { userId, password, confirmPassword, team_id } = formData;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -29,13 +28,21 @@ const RegisterPage: React.FC = () => {
       alert("비밀번호가 일치하지 않습니다.");
       return;
     }
-    
-    console.log("회원가입 데이터:", formData);
-    const response = await axios.post(`${API_BASE_URL}/user/register`, { users_id: userId, password: password, username: userName, team_id: team_id, role: "user" });
 
-    console.log("response : ", response);
-    alert("회원가입이 완료되었습니다!");
-    navigate('/login');
+    console.log("회원가입 데이터:", formData);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/user/register`, { users_id: userId, password: password, team_id: team_id, role: "user" });
+
+      console.log("response : ", response);
+      alert("회원가입이 완료되었습니다!");
+      navigate('/login');
+    } catch (error: unknown) {
+      console.error("회원가입 요청 실패:", error);
+      const detail = axios.isAxiosError(error) && typeof error.response?.data?.detail === "string"
+        ? error.response.data.detail
+        : "회원가입 중 오류가 발생했습니다.";
+      alert(detail);
+    }
   };
 
   return (
@@ -49,13 +56,8 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <div className="inputGroup">
-          <label>Name</label>
-          <input name="userName" value={userName} onChange={handleChange} placeholder="이름" required />
-        </div>
-        
-        <div className="inputGroup">
           <label>team</label>
-          <input name="team_id" value={team_id} onChange={handleChange} placeholder="팀 이름" required />
+          <input name="team_id" value={team_id} onChange={handleChange} placeholder="등록된 팀 ID" required />
         </div>
 
         <div className="inputGroup">
@@ -69,7 +71,7 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <button type="submit" className="registerButton">가입하기</button>
-        
+
         <div className="footer">
           <span>이미 계정이 있으신가요?</span>
           <button type="button" onClick={() => navigate('/login')} className="linkButton">로그인</button>
