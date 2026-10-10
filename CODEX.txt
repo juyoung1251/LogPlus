@@ -1,41 +1,43 @@
 # 프로젝트 진행 상태
-
 프로젝트 경로: /app/logplus-platform
-마지막 업데이트: 2026-09-27
-현재 목표: 4인 협업에서 운영·LLM 인프라와 애플리케이션 개발 책임을 분리
-현재 상태: React/Vite 웹, FastAPI·MariaDB API, Git push 후 Docker builder, Ollama 분석 파이프라인의 책임 경계를 확인했다. 사용자 1명은 서버·LLM 런타임을 맡고, 나머지 3명은 API/DB, 웹/UX, 빌드·QA·AI 기능으로 나누는 안을 정리했다.
+마지막 업데이트: 2026-10-04
+현재 목표: 다음 작업 시작 때 로그 추출 개선을 먼저 상기하고 진행 여부 확인
+현재 상태: 사용자 요청으로 개선은 다음으로 미룸. 원문 보존·INFO 축소·오류/예외/원인 스택/문맥 추출 계획을 기록. 소스 수정 없음.
 
 완료된 작업:
-- `docs/END_TO_END_ARCHITECTURE.md`에 구성도, sequence diagram, API·데이터 경계, 검증 근거, 운영 보완점을 기록
-- `docs/END_TO_END_ARCHITECTURE.pdf`에 같은 흐름을 4페이지 PDF로 추가
-- 현재 운영 경로(`/app/logplus-platform`), `/repos`, `projects`, `logs`, MariaDB 역할을 문서화
-- 실제 구현과 샘플 UI 영역(통계 카드·알림·차트)을 구분
-- 권장 4인 역할: 사용자=인프라·배포·LLM 런타임, 팀원 2=API·DB·인증, 팀원 3=웹·UX, 팀원 4=builder·QA·AI 기능 평가
-- 운영 서버 변경은 사용자 승인으로 제한하고, 팀원은 로컬·스테이징·mock 환경에서 독립 개발하도록 경계를 정함
+- Git push → Docker LIB/RUN 로그 → 한국어 AI 분석 및 TXT/DB 이력 구조 확인.
+- 사용자 교체 코드: URL 환경변수 필수, 기본 qwen3:4b-instruct-2507-q4_K_M, 선택 Bearer 헤더, 연결/읽기 timeout 10/120초, 호출·분석 시간 측정.
+- 백업과 로그 전처리·저장·이력·다운로드 함수 동일. 기존 웹 Index.tsx 응답 필드 유지.
+- docs/COLAB_MODEL_RECOMMENDATION_PROMPT.md 제공. 외부 Colab 추론 시 LogPlus에 모델 중복 설치 불필요.
+- ai_training_examples SQL 존재. 사례 ORM/API/화면/승인/RAG/학습 미연결. 이전 테이블 생성·초기 0건 기록은 이번 DB 조회로 재검증하지 않음.
 
 이번 작업에서 변경한 파일:
-- `CODEX.txt`
+- CODEX.txt
 
 실행한 테스트와 결과:
-- `pwd -P`: `/app/logplus-platform` 확인
-- `git -c safe.directory=/app/logplus-platform status --short`: 기존 `CODEX.txt` 수정 및 아키텍처 관련 미추적 파일 확인, 보존
-- README·구조 문서·웹 package.json/package-lock·API requirements를 읽어 역할 경계를 확인
-- 코드 변경이 없는 역할 설계 작업이므로 빌드·서비스 재기동은 실행하지 않음
+- pwd /app/logplus-platform. 샌드박스 .aws 오류로 승인 외부 실행. git -c safe.directory로 상태 확인, 기존 변경 보존.
+- 이전 문법·함수 비교·소스/백업 SHA-256 동일 확인.
+- 이전 Requests 2.25.1 설치·공식 문서 대조 확인. 상세 버전은 검증 보고서 참고.
+- python3 /tmp/logplus-ai-colab-review.py: 13개 통과. HTTP/timeout/auth/빈 URL/잘못된 응답/한국어 재작성/임시 파일 보존·저장/기존 이력·다운로드/경로 검사/쓰기 rollback/FastAPI ASGI 계약 확인.
+- 이전 TestClient는 httpx 누락으로 실패, ASGI 직접 호출 검증 통과.
+- 이전 소스 확인: Docker 원문은 LIB/RUN 저장. AI는 대표 오류·문맥, 미검출 시 마지막 40줄 사용.
+- 익명 전처리 예제: Java ConnectException 보존. ModuleNotFoundError/failed to solve 뒤 INFO 50줄이면 원인 누락 재현. AST 추출 함수만 실행, DB·운영 로그·외부 모델·서버·빌드 접근 없음.
 
 현재 알려진 문제:
-- 프론트 전체 `npm run build`는 기존 TypeScript 오류로 실패한 기록이 있다.
-- Vite는 5174 단일 포트를 사용하도록 했지만 기존 프로세스가 남으면 기동 포트가 흔들린 이력이 있다.
-- 최종 probe에서 `curl http://127.0.0.1:8000/health`와 `curl -I http://127.0.0.1:8080/git/info/refs`가 `connection refused`로 실패했다. 앞선 probe와 운영 로그에는 성공 기록이 있으나 현재 프로세스 상태는 미확정이며 재기동하지 않았다.
-- 로그인·로그·AI API는 요청 body의 users_id/team_id에 의존하며 서버 세션/토큰이 없다.
-- 비밀번호 해시, CORS 제한, DB 비밀값 환경변수화, builder queue/lock이 추가로 필요하다.
-- 대시보드 통계·알림·예외 차트는 현재 샘플 데이터다. Docker 컨테이너도 외부 앱 화면이 아니라 실행 로그 수집용이다.
+- 새 코드 URL 기본값 빈 문자열. 이전 실행 스크립트는 .env 자동 로딩 없음. 이후 start.sh 변경과 신규 env 파일 감지했으나 내용·실제 적용 상태 미확인. URL 전달 필요.
+- .env.example 모델은 이전 7B. Colab 모델명·응답 계약·접근 주소·인증 검증 미확인.
+- 읽기 120초는 전체 제한 아님. 한국어 재작성은 추가 요청. 시간 응답은 전처리/DB/파일 저장 제외.
+- 전처리에서 원문 근거·발생 횟수 누락 가능. 모델 교체만으로 복구 불가.
+- 이전 Git MySQL2006/저장소 소유권, pool_pre_ping 미설정, PyMySQL 버전 차이, AI ORM/SQL 차이·과거 로그ID 누락은 재검증 필요.
 
 다음 작업:
-- 팀원별 담당 모듈, PR 승인자, 로컬·스테이징 실행 절차를 문서화
-- builder·로그·AI 분석을 포함한 통합 테스트와 CI를 팀원 4가 먼저 정리
-- 프론트 TypeScript 오류와 인증·비밀값·로그 접근 제어를 담당자별 작업으로 분리
+- 사용자 요청: 다음 작업 시작 때 먼저 "지난번에 INFO를 줄이고 오류·예외·원인 스택 중심 추출을 개선하기로 했는데, 이번에 진행할까요?"라고 상기하고 진행 여부를 확인한다. 개선 구현은 아직 보류.
+- 진행 시 원문 보존, Python/Docker/컴파일·패키지 실패와 문맥 포함, 반복 횟수 집계 검토.
+- Colab 호환 API·모델·접근 주소 확인 → 실행 방식에 맞게 환경변수 전달 → 백엔드 재시작 → 익명 예제 연결 확인 → 웹 분석·이력·다운로드 확인.
+- 동시 1→2→3 실제 추론 지연·메모리·품질 비교. 사례 저장/승인 연결 후 approved 사례 RAG 적용, 학습은 검증 사례 축적 후 판단.
+- Git 복구 요청 시 DB 연결·실행 계정/저장소 권한 확인 및 인증 push 검증.
 
 주의사항:
-- 기존 소스 변경과 미추적 `apps/api/Aireanalyze.py_bak`를 보존한다.
-- `.env`, 토큰, 비밀번호, 운영 DB·bare repo 데이터는 문서나 Git에 기록하지 않는다.
-- 이번 작업에서는 push·hook 재실행 같은 외부 상태 변경을 하지 않았다.
+- 기존 사용자 변경·백업 보존, 형제 프로젝트·외부 운영 데이터 접근 금지.
+- 비밀정보 기록·커밋·외부 프롬프트 전송 금지. 테스트 로그 익명화.
+- 기존 실행/DB/API/로그인/배포 설정 임의 변경 금지.

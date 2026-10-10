@@ -8,9 +8,10 @@ import os
 import re
 import shlex
 import subprocess
+import logging
 
 router = APIRouter()
-
+logging.basicConfig(level=logging.INFO)
 class RegisterInput(BaseModel): # 회원가입 요청 데이터
     users_id: str
     password: str
@@ -30,11 +31,12 @@ def register_user(userData: RegisterInput, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
 
     existing_team = db.query(TeamTable).filter(TeamTable.team_id == userData.team_id).first()
-    if existing_team is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"존재하지 않는 팀입니다: {userData.team_id}. 등록된 team_id를 입력하세요.",
-        )
+    # if existing_team is None:
+    #     raise HTTPException(
+    #     status_code=400,
+    #     detail=f"존재하지 않는 팀입니다: {userData.team_id}. 등록된 team_id를 입력하세요.",
+    #     )
+    logging.info(f"1###############db.flush()#############")
 
     new_user = UserTable(
         users_id=userData.users_id,
@@ -44,9 +46,18 @@ def register_user(userData: RegisterInput, db: Session = Depends(get_db)):
         created_at=datetime.now()
     )
 
+
     try:
         db.add(new_user)
+        if existing_team is None:
+            new_team = TeamTable(
+                team_id=userData.team_id,
+                team_name=userData.team_id,
+                created_at=datetime.now()
+            )
+            db.add(new_team)
         db.flush()
+        logging.info(f"2###############db.flush()#############" + new_user.users_id)
 
         project_root = os.getenv("PROJECT_ROOT", "/app/logplus-platform/projects")
         builder_script = os.getenv(

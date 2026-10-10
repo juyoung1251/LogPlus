@@ -1,6 +1,20 @@
 #!/bin/bash
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/logplus-colab.env"
+
+if [ ! -r "$ENV_FILE" ]; then
+    echo "설정 파일을 읽을 수 없습니다: $ENV_FILE" >&2
+    exit 1
+fi
+
+set -a
+source "$ENV_FILE" || exit 1
+set +a
+
+: "${OLLAMA_URL:?OLLAMA_URL 설정이 필요합니다}"
+: "${OLLAMA_API_KEY:?OLLAMA_API_KEY 설정이 필요합니다}"
+
 APP_LOG_ROOT="${APP_LOG_ROOT:-/app/logs}"
 USER_LOG_ROOT="${USER_LOG_ROOT:-/app/logplus-platform/logs}"
 PID_FILE="$SCRIPT_DIR/app.pid"

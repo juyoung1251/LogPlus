@@ -103,8 +103,9 @@ function formatRange(from: Date, to: Date) {
 
 const Index = () => {
   const navigate = useNavigate();
-  const userInfo = useUserStore(s => s.userInfo);
-  
+  const store = useUserStore.getState();
+  const userInfo = store.userInfo;
+  const reset = store.reset;
 
 const RECENT_ALERTS: Alert[] = [
   { level: "ERROR", message: "[ERROR] DB 연결 실패", time: "02:54:56" },
@@ -224,6 +225,7 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
   const [now, setNow] = useState<Date>(() => new Date());
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement | null>(null);
+  const focusRef = useRef<Boolean>(false);
   const [search, setSearch] = useState("");
   const [aiAnalysisVisible, setAiAnalysisVisible] = useState(true);
   const [logFileList, setLogFileList] = useState<LogFileItem[]>([]);
@@ -287,15 +289,17 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
 
   const border = "#1e2d42";
   const muted  = "#546070";
-
   const fetchLogList = async(e) => {
+    if(focusRef.current) return;
+
+    focusRef.current = true;
     const currentUser = useUserStore.getState().userInfo;
     if (!currentUser) {
       e.target.blur();
       alert("로그인이 필요합니다.");
       return;
     }
-
+    
     try {
       const response = await axios.post(LOG_API_URL, {
         users_id: currentUser.userId,
@@ -304,6 +308,7 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
       const data = response.data;
 
       if (!data || data.status === "fail") {
+        e.target.blur();
         alert(data?.message ?? "로그 목록을 불러오지 못했습니다.");
         setLogFileList([]);
         return;
@@ -313,6 +318,7 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
     } catch (e) {
       console.error("error : ", e);
       alert("로그 목록 조회 중 오류가 발생했습니다.");
+      focusRef.current = false;
     }
   }
 
@@ -397,6 +403,14 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
     await fetchLogContent(Number(value));
   }
 
+  function logOut() {
+    useUserStore.getState().reset();
+
+    const userInfo = useUserStore.getState().userInfo;
+    if(!userInfo || userInfo === null)
+    alert("로그아웃 되었습니다.");
+  }
+
   const visibleLogFiles = useMemo(
     () =>
       logFileList.filter((log) => {
@@ -459,6 +473,13 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
             className={`nav-item`}
           >
             다크모드
+          </button>
+          <button
+            key={"logOut"}
+            className={`nav-item`}
+            onClick={() => logOut()}
+          >
+            로그아웃
           </button>
 
         <div className="sidebar-version">v1.0.0</div>

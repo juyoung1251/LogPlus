@@ -56,7 +56,7 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <div className="inputGroup">
-          <label>team</label>
+          <label>team (등록된 team이 없으면 자동으로 생성됩니다.)</label>
           <input name="team_id" value={team_id} onChange={handleChange} placeholder="등록된 팀 ID" required />
         </div>
 

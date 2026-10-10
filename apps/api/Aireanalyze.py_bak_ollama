@@ -1,6 +1,5 @@
 import os
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -15,15 +14,9 @@ from database import get_db, LogTable, AiAnalysisTable
 
 router = APIRouter()
 
-# Colab 접속 주소는 백엔드 실행 환경에서 지정한다. 노트북 URL이 아니다.
-OLLAMA_URL = os.getenv("OLLAMA_URL", "").strip()
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
-# Colab API 앞단이 Bearer 인증을 실제로 검증하도록 구성한 경우 사용한다.
-OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
-OLLAMA_CONNECT_TIMEOUT = float(os.getenv("OLLAMA_CONNECT_TIMEOUT", "10"))
-# 응답 읽기 대기 시간이며 전체 분석의 절대 제한 시간은 아니다.
-OLLAMA_READ_TIMEOUT = float(os.getenv("OLLAMA_READ_TIMEOUT", "120"))
-# 실제 컨텍스트 길이는 Colab의 Ollama에서 설정한다. 아래는 문자 수 제한이다.
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://100.119.247.56:11434/v1/chat/completions")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+# Ollama의 실제 컨텍스트(현재 4096)에 프롬프트와 답변 공간을 남긴다.
 MAX_LOG_CHARS = 6000
 MAX_OUTPUT_TOKENS = int(os.getenv("OLLAMA_MAX_TOKENS", "1200"))
 # 사용자 로그와 AI 분석 결과가 쌓이는 곳: /app/logplus-platform/logs/{team_id}/{users_id}/analyses/
@@ -214,67 +207,32 @@ def _preprocess_log(log_content: str) -> str:
 
 
 def _korean_ratio(text: str) -> float:
-    # LOGPLUS_LATENCY_PATCH_V1: 명확한 코드/로그 인용은 언어 판정에서 제외한다.
-    prose = re.sub(r"```[^\n]*\n.*?(?:```|\Z)", " ", text, flags=re.DOTALL)
-    prose = re.sub(r"`[^`\n]+`", " ", prose)
-    prose = re.sub(r"(?m)^\s*>.*$", " ", prose)
-    prose = re.sub(
-        r"(?m)^\s*(?:[-*]\s*)?(?:근거\s*로그|대표\s*시각/로거/클래스)\s*:.*$",
-        " ", prose,
-    )
-    prose = re.sub(r"\b(?:[A-Za-z_]\w*\.)+[A-Za-z_]\w*\b", " ", prose)
-    prose = re.sub(r"\b[A-Za-z]\w*_[A-Za-z0-9_]+\b", " ", prose)
-    prose = re.sub(r"\b[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]*)+\b", " ", prose)
-    prose = re.sub(r"\b[A-Z][A-Z0-9_]{2,}\b", " ", prose)
-    korean = len(re.findall(r"[가-힣]", prose))
-    latin = len(re.findall(r"[A-Za-z]", prose))
+    korean = len(re.findall(r"[가-힣]", text))
+    latin = len(re.findall(r"[A-Za-z]", text))
     total = korean + latin
-    # 설명 자체가 없는 경우에는 기존 내용을 임의로 재작성하지 않는다.
-    return korean / total if total else 1.0
+    if total == 0:
+        return 1.0
+    return korean / total
 
 
 def _ollama_chat(messages: list[dict], temperature: float = 0.2) -> str:
-    if not OLLAMA_URL:
-        raise RuntimeError("OLLAMA_URL에 Colab 모델 API 주소를 설정해 주세요.")
-
-    headers = {"Content-Type": "application/json"}
-    if OLLAMA_API_KEY:
-        headers["Authorization"] = f"Bearer {OLLAMA_API_KEY}"
-
-    started = time.perf_counter()
-    try:
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": OLLAMA_MODEL,
-                "messages": messages,
-                "stream": False,
-                "temperature": temperature,
-                "top_p": 0.8,
-                "max_tokens": MAX_OUTPUT_TOKENS,
-            },
-            headers=headers,
-            timeout=(OLLAMA_CONNECT_TIMEOUT, OLLAMA_READ_TIMEOUT),
-        )
-        response.raise_for_status()
-        data = response.json()
-        usage = data.get("usage") or {}
-        choice = data["choices"][0]
-        print(
-            f"AI 생성 통계: 입력={usage.get('prompt_tokens', '미제공')}토큰 "
-            f"출력={usage.get('completion_tokens', '미제공')}토큰 "
-            f"종료={choice.get('finish_reason', '미제공')}"
-        )
-        content = data["choices"][0]["message"]["content"]
-        if not isinstance(content, str) or not content.strip():
-            raise ValueError("모델 API가 비어 있거나 잘못된 분석 결과를 반환했습니다.")
-        return content.strip()
-    finally:
-        # 로그 본문과 인증 토큰은 출력하지 않는다. 재작성도 별도 호출로 기록된다.
-        print(
-            f"AI 모델 호출 시간: {time.perf_counter() - started:.2f}초 "
-            f"model={OLLAMA_MODEL}"
-        )
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": OLLAMA_MODEL,
+            "messages": messages,
+            "stream": False,
+            "temperature": temperature,
+            "top_p": 0.8,
+            # /v1/chat/completions에서 지원되는 출력 토큰 상한.
+            # num_ctx는 이 엔드포인트가 아니라 Ollama 서버 설정에서 관리한다.
+            "max_tokens": MAX_OUTPUT_TOKENS,
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=120,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
 
 
 def _rewrite_in_korean(text: str) -> str:
@@ -365,10 +323,7 @@ def _call_ollama(log_content: str) -> str:
         ]
     )
 
-    prose_ratio = _korean_ratio(analysis_text)
-    print(f"AI 언어 판정: 설명의 한국어 비율={prose_ratio:.3f}")
-    if prose_ratio < 0.35:
-        print("AI 한국어 재작성 호출 발생")
+    if _korean_ratio(analysis_text) < 0.35:
         analysis_text = _rewrite_in_korean(analysis_text)
 
     return analysis_text
@@ -476,22 +431,6 @@ def reanalyze(userData: ReanalyzeInput, db: Session = Depends(get_db)):
     # 핵심 라인만 추려서 분석 (속도/정확도 향상)
     analysis_target = _preprocess_log(log_content)
 
-    # 원본 파일 크기와 전처리 후 로그 길이를 구분해 기록한다.
-    # 파일 크기 확인 실패는 분석 자체를 중단하지 않는다.
-    try:
-        file_bytes = Path(source_log.log_path).stat().st_size
-        file_size = f"{file_bytes}바이트 ({file_bytes / 1024:.2f} KiB)"
-    except OSError:
-        file_size = "확인 불가"
-
-    print(
-        f"AI 분석 입력: build_log_id={userData.build_log_id} "
-        f"원본 파일={file_size} "
-        f"원본 로그={len(log_content)}자 "
-        f"전처리 로그={len(analysis_target)}자"
-    )
-
-    ai_started = time.perf_counter()
     try:
         analysis_text = _call_ollama(analysis_target)
     except requests.Timeout:
@@ -499,17 +438,9 @@ def reanalyze(userData: ReanalyzeInput, db: Session = Depends(get_db)):
     except requests.RequestException as e:
         print(f"Ollama 호출 실패: {e}")
         return {"status": "fail", "message": "AI 서버 호출 중 오류가 발생했습니다."}
-    except RuntimeError as e:
-        return {"status": "fail", "message": str(e)}
-    except (ValueError, TypeError, KeyError, IndexError) as e:
-        print(f"Ollama 응답 파싱 실패: {type(e).__name__}")
+    except (KeyError, IndexError) as e:
+        print(f"Ollama 응답 파싱 실패: {e}")
         return {"status": "fail", "message": "AI 응답을 처리하지 못했습니다."}
-    finally:
-        ai_elapsed_seconds = round(time.perf_counter() - ai_started, 3)
-        print(
-            f"AI 전체 처리 시간: {ai_elapsed_seconds:.3f}초 "
-            f"build_log_id={userData.build_log_id} model={OLLAMA_MODEL}"
-        )
 
     analysis = [line.strip(" -•\t") for line in analysis_text.splitlines() if line.strip()]
 
@@ -522,8 +453,6 @@ def reanalyze(userData: ReanalyzeInput, db: Session = Depends(get_db)):
     return {
         "status": "success",
         "message": "재분석 완료",
-        # 최초 분석과 한국어 재작성의 합계. DB/파일 저장 시간은 제외.
-        "ai_elapsed_seconds": ai_elapsed_seconds,
         "analysis_id": saved.analysis_id,
         "build_log_id": saved.build_log_id,
         "created_at": saved.created_at.isoformat() if saved.created_at else None,
@@ -605,5 +534,4 @@ def download_analysis(
                 f"filename*=UTF-8''{quote(filename)}",
         },
     )
-
 
