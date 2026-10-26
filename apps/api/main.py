@@ -11,6 +11,8 @@ from LoginUser import router as login_router
 from SelectLogs import router as logs_router
 from Aireanalyze import router as ai_router
 from GitAuth import router as git_auth_router
+from Dashboard import router as dashboard_router
+from Settings import router as settings_router
 from pydantic import BaseModel
 
 
@@ -34,6 +36,8 @@ app.include_router(create_user_router)
 app.include_router(logs_router)
 app.include_router(ai_router)
 app.include_router(git_auth_router)
+app.include_router(dashboard_router)
+app.include_router(settings_router)
 
 
 @app.get("/")

@@ -1,43 +1,42 @@
 # 프로젝트 진행 상태
+
 프로젝트 경로: /app/logplus-platform
-마지막 업데이트: 2026-10-04
-현재 목표: 다음 작업 시작 때 로그 추출 개선을 먼저 상기하고 진행 여부 확인
-현재 상태: 사용자 요청으로 개선은 다음으로 미룸. 원문 보존·INFO 축소·오류/예외/원인 스택/문맥 추출 계획을 기록. 소스 수정 없음.
+마지막 업데이트: 2026-10-24 14:33:30 KST
+현재 목표: Linux 서버의 실제 구현·운영 현황 Excel 작성
+현재 상태: docs/LogPlus_시스템현황_20261024.xlsx 생성·재개봉 검증 완료. 운영 관측 2026-10-24 13:53:41 KST; 소스는 종료 전 외부 변경 재대조.
 
 완료된 작업:
-- Git push → Docker LIB/RUN 로그 → 한국어 AI 분석 및 TXT/DB 이력 구조 확인.
-- 사용자 교체 코드: URL 환경변수 필수, 기본 qwen3:4b-instruct-2507-q4_K_M, 선택 Bearer 헤더, 연결/읽기 timeout 10/120초, 호출·분석 시간 측정.
-- 백업과 로그 전처리·저장·이력·다운로드 함수 동일. 기존 웹 Index.tsx 응답 필드 유지.
-- docs/COLAB_MODEL_RECOMMENDATION_PROMPT.md 제공. 외부 Colab 추론 시 LogPlus에 모델 중복 설치 불필요.
-- ai_training_examples SQL 존재. 사례 ORM/API/화면/승인/RAG/학습 미연결. 이전 테이블 생성·초기 0건 기록은 이번 DB 조회로 재검증하지 않음.
+- 기존 지침·문서, 웹/API/빌더/운영 스크립트와 실DB 메타데이터를 읽기 전용 대조.
+- main / 828eec34a0abbe08711af5decf3deec945d360a4 작업트리(기존 수정 포함) 조사. 기존 변경 보존.
+- 업무 API 최종19개가 live OpenAPI와 일치. MariaDB 5테이블·35컬럼·FK/인덱스 조회 후 rollback. 사용자 데이터 행 미조회.
+- 대시보드4 API·sessionStorage 연결 존재. 탈퇴 DB/파일 삭제와 Settings 모달 연결 확인; 실제 삭제는 미실행.
+- 외부 동시 변경 재조사: 독립 User.tsx·/user 제거, /settings에 계정/비밀번호변경/탈퇴·활동수·팀원·repo 안내 구현; Settings API2개 추가. 조사자의 소스 변경 없음.
+- Excel: 요구사항53, 테스트101, 시스템19, API19, DB35, 운영29, 이슈30, 안내59행(헤더 제외).
 
 이번 작업에서 변경한 파일:
-- CODEX.txt
+- docs/LogPlus_시스템현황_20261024.xlsx (신규)
+- CODEX.txt (현재 조사 상태로 갱신)
 
 실행한 테스트와 결과:
-- pwd /app/logplus-platform. 샌드박스 .aws 오류로 승인 외부 실행. git -c safe.directory로 상태 확인, 기존 변경 보존.
-- 이전 문법·함수 비교·소스/백업 SHA-256 동일 확인.
-- 이전 Requests 2.25.1 설치·공식 문서 대조 확인. 상세 버전은 검증 보고서 참고.
-- python3 /tmp/logplus-ai-colab-review.py: 13개 통과. HTTP/timeout/auth/빈 URL/잘못된 응답/한국어 재작성/임시 파일 보존·저장/기존 이력·다운로드/경로 검사/쓰기 rollback/FastAPI ASGI 계약 확인.
-- 이전 TestClient는 httpx 누락으로 실패, ASGI 직접 호출 검증 통과.
-- 이전 소스 확인: Docker 원문은 LIB/RUN 저장. AI는 대표 오류·문맥, 미검출 시 마지막 40줄 사용.
-- 익명 전처리 예제: Java ConnectException 보존. ModuleNotFoundError/failed to solve 뒤 INFO 50줄이면 원인 누락 재현. AST 추출 함수만 실행, DB·운영 로그·외부 모델·서버·빌드 접근 없음.
+- 읽기 전용 점검 8건: PASS7 / FAIL1(API app.pid가 미존재 PID). 설계 테스트93건 미실행.
+- root/health/OpenAPI/웹 HTTP200; Git 무인증401. DB connected; Nginx·MariaDB·Docker·fcgiwrap@logplus active; logplus-n8n running.
+- Excel 재개봉: 8시트·헤더/실데이터·필터/고정/줄바꿈·ID 양방향 연결·집계·19 API·35 DB컬럼·민감값 미포함·ZIP CRC 모두 통과.
+- 외부 변경8개를 읽기 전용 재조사, 2026-10-24 14:28:39 KST 소스 기준으로 문서화. 이후 변경은 다음 갱신 대상. 빌드·POST·push·AI·학습·부하·재시작 미실행.
+- Excel 도구는 /tmp/logplus-xlsx-venv의 openpyxl3.1.5만 사용. 운영 의존성 변경 없음.
 
 현재 알려진 문제:
-- 새 코드 URL 기본값 빈 문자열. 이전 실행 스크립트는 .env 자동 로딩 없음. 이후 start.sh 변경과 신규 env 파일 감지했으나 내용·실제 적용 상태 미확인. URL 전달 필요.
-- .env.example 모델은 이전 7B. Colab 모델명·응답 계약·접근 주소·인증 검증 미확인.
-- 읽기 120초는 전체 제한 아님. 한국어 재작성은 추가 요청. 시간 응답은 전처리/DB/파일 저장 제외.
-- 전처리에서 원문 근거·발생 횟수 누락 가능. 모델 교체만으로 복구 불가.
-- 이전 Git MySQL2006/저장소 소유권, pool_pre_ping 미설정, PyMySQL 버전 차이, AI ORM/SQL 차이·과거 로그ID 누락은 재검증 필요.
+- 업무 API 서버 인증 없음, 비밀번호 직접 저장/비교, DB 인증값 소스 선언, 가입 formData console 출력, role 요청값 저장.
+- POST /logs root 포함관계 검사 부족; API stale PID; 웹 stop.sh 포트 전체 kill -9.
+- PyMySQL 요구2.2.8/설치1.1.3 불일치. DATABASE_URL 예시와 실제 DB_URL 하드코딩 불일치.
+- SQL001 model/analysis/solution은 실DB·ORM에 없음. ai_training_examples는 등록/승인/RAG 미연결; 탈퇴 DELETE만 사용.
+- 탈퇴 파일 실패 재시도·analysis_id만 남은 학습 참조 정리 미흡. 빌더 master 고정·등록 실패 검사/동시 실행 제한 부족.
 
 다음 작업:
-- 사용자 요청: 다음 작업 시작 때 먼저 "지난번에 INFO를 줄이고 오류·예외·원인 스택 중심 추출을 개선하기로 했는데, 이번에 진행할까요?"라고 상기하고 진행 여부를 확인한다. 개선 구현은 아직 보류.
-- 진행 시 원문 보존, Python/Docker/컴파일·패키지 실패와 문맥 포함, 반복 횟수 집계 검토.
-- Colab 호환 API·모델·접근 주소 확인 → 실행 방식에 맞게 환경변수 전달 → 백엔드 재시작 → 익명 예제 연결 확인 → 웹 분석·이력·다운로드 확인.
-- 동시 1→2→3 실제 추론 지연·메모리·품질 비교. 사례 저장/승인 연결 후 approved 사례 RAG 적용, 학습은 검증 사례 축적 후 판단.
-- Git 복구 요청 시 DB 연결·실행 계정/저장소 권한 확인 및 인증 push 검증.
+- Excel 이슈 P1부터 별도 구현 범위를 합의하고 격리 환경에서 회귀 검증.
+- Colab 내부·외부 AI 성공·수신/학습 상태는 별도 세션에서 보완. n8n workflow·백업/복구·rotation·user systemd 관리 미확인.
+- 기존 ID 유지; Colab 새 항목은 REQ100+/TC200+ 등 문서 안내 예약 범위 사용.
 
 주의사항:
-- 기존 사용자 변경·백업 보존, 형제 프로젝트·외부 운영 데이터 접근 금지.
-- 비밀정보 기록·커밋·외부 프롬프트 전송 금지. 테스트 로그 익명화.
-- 기존 실행/DB/API/로그인/배포 설정 임의 변경 금지.
+- 이번 작업은 조사·문서만. 서버/DB 설정·서비스 재시작·운영 의존성 임의 변경 금지.
+- 비밀값·실제 사용자 로그/개인정보 기록 금지. /repos·사용자 작업본·형제 프로젝트 직접 조사 생략.
+- 소스와 운영 확인 분리. 과거 수동 보고를 현재 PASS로 재사용하지 않는다.

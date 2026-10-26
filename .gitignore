@@ -27,3 +27,4 @@ infra/n8n/builds/
 .DS_Store
 .idea/
 .vscode/
+apps/api/training-output/

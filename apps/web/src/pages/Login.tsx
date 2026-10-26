@@ -28,7 +28,7 @@ const LoginPage: React.FC = () => {
           useUserStore.getState().setUserInfo(user_id, team_id);
 
           alert("로그인 성공! 홈으로 이동합니다.");
-          navigate("/index");
+          navigate("/dashboard");
         }
       }
     } catch (error) {

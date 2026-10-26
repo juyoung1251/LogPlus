@@ -1,0 +1,1 @@
+{"accepted_count":0,"artifacts_ready":true,"candidate_count":2,"created_at":"2026-10-24T11:36:14.302241+00:00","job_id":"job_8ab4ab7cc0664fc39ee34f9b08da82e6","reason":"need_50_rule_supported_examples_and_5_groups","rule_version":"missing-module-v1","state":"skipped","updated_at":"2026-10-24T11:36:14.306098+00:00","validation_skipped":{"unsupported_or_multiple_errors":2}}

@@ -1,0 +1,121 @@
+LogPlus 변경 내역 (2026-10-17)
+============================================================
+
+모든 경로는 /app/logplus-platform/ 기준입니다.
+아직 커밋하지 않은 상태입니다.
+
+
+1. 폴더 구조와 변경 위치
+------------------------------------------------------------
+
+apps/
+  api/                                  (백엔드, FastAPI)
+    Dashboard.py            [신규] 대시보드 API 4개
+    main.py                 [수정] Dashboard 라우터 등록 (+2줄)
+
+  web/                                  (프론트엔드, React + Vite)
+    index.html              [수정] <title> my-app -> LogPlus
+    src/
+      App.tsx               [수정] 라우팅 전체 재구성
+      App.css               [수정] 주석 LogPulse -> LogPlus
+                                   (실제로는 import 되지 않는 파일)
+      store/
+        store.ts            [수정] 로그인 정보를 sessionStorage에 보관
+      pages/
+        Dashboard.tsx       [신규] 대시보드 페이지
+        Logs.tsx            [이름변경] Index.tsx -> Logs.tsx, 로그 조회 페이지
+        Settings.tsx        [신규] 설정 페이지 ("준비 중")
+        User.tsx            [수정] 계정 관리 페이지 ("준비 중")
+        Login.tsx           [수정] 로그인 후 /dashboard 로 이동 (1줄)
+        css/
+          index.css         [수정] 공용 스타일 (대시보드, 설정, 로고 등)
+
+
+2. 주소(라우트)와 파일  - apps/web/src/App.tsx
+------------------------------------------------------------
+
+  /            -> /dashboard 로 이동 (기본 화면 = 대시보드)
+  /index       -> /dashboard 로 이동 (예전 주소 호환)
+  /dashboard   -> pages/Dashboard.tsx
+  /logs        -> pages/Logs.tsx
+  /user        -> pages/User.tsx      (계정 관리)
+  /settings    -> pages/Settings.tsx  (설정)
+  /login       -> pages/Login.tsx     (기존 그대로)
+  /register    -> pages/Register.tsx  (기존 그대로)
+
+* 페이지 하나당 tsx 파일 하나입니다.
+* 사이드바 코드는 4개 페이지 파일(Dashboard, Logs, User, Settings)에
+  똑같이 복사되어 있습니다. 메뉴를 바꿀 때는 네 곳을 모두 고쳐야 합니다.
+
+
+3. 작업별 내용
+------------------------------------------------------------
+
+[1] 레이아웃 정리와 브랜드명
+  - 오른쪽 사이드 패널 삭제
+    (최근 알림 / 로그 통계 / 예외 TOP 3 / AI 분석 요약)
+    -> 로그 뷰어 영역을 넓힘
+  - 검색창을 "로그 내보내기" 버튼 옆으로 이동
+  - LogPulse -> LogPlus
+    (Logs.tsx 로고, App.css 주석, index.html title)
+
+[2] 대시보드
+  화면  : apps/web/src/pages/Dashboard.tsx
+  백엔드: apps/api/Dashboard.py
+
+  섹션                         위치         API                                  데이터 출처
+  ---------------------------  -----------  -----------------------------------  ----------------------------------
+  일별 ERROR/WARN 그래프       상단         GET /dashboard/daily-stats           build_logs 의 RUN 로그 파일
+  (7/14/30일 전환)
+  자주 발생하는 예외 TOP 3     중단 왼쪽    GET /dashboard/top-exceptions        RUN 로그의 예외 선언 줄
+  언어별 빌드 분포 (팀 전체)   중단 오른쪽  GET /dashboard/language-distribution projects/{team}/{user}/ 설정 파일
+  최근 알림 (최신 20건)        하단         GET /dashboard/recent-alerts         RUN 로그
+
+  - 언어 판별 규칙은 services/builder/build.sh 와 같음
+    (requirements.txt/.py -> Python, package.json -> Node,
+     pom.xml -> Java-Maven, build.gradle -> Java-Gradle,
+     .c/.cpp/CMakeLists.txt/Makefile -> C/C++)
+  - 작업 폴더 경로는 /app/projects 가 서버에 없어서
+    실제 위치인 /app/logplus-platform/projects (PROJECT_ROOT 환경변수) 사용
+  - ERROR/WARN/예외/알림은 1/2/4번 섹션 모두 로그인한 사용자 본인 로그 기준,
+    언어 분포만 팀 전체 기준
+  - 로그 줄에는 시각이 없어서, 알림 시각은 로그 파일이 저장된 시각을 사용
+
+[3] 로그 조회  - apps/web/src/pages/Logs.tsx
+  - 검색: 입력한 키워드가 포함된 줄만 표시 (대소문자 무시)
+    -> 원래는 입력값을 받기만 하고 쓰지 않아 동작하지 않았음
+  - 통계 카드: 하드코딩 값(12 / 35, "vs 어제")
+    -> 선택한 로그의 실제 ERROR/WARN 줄 수
+    -> 증감은 같은 종류(RUN/LIB)의 바로 이전 빌드와 비교
+  - 자동 새로고침 토글: 원래 아무 동작 없었음
+    -> ON 이면 30초마다 로그 목록을 다시 불러와 새 빌드 반영
+
+[4] 사이드바와 공통 동작 (4개 페이지 공통)
+  - 로고 클릭: 브라우저 전체 새로고침 후 /dashboard 로 이동
+  - 로그아웃: 로그인 정보 초기화 후 /login 으로 이동
+  - 다크모드: 메뉴와 관련 상태 코드 삭제
+  - "로그인이 필요합니다" 팝업: 확인을 누르거나 닫으면 /login 으로 이동
+  - 설정 / 계정 관리: 라우트 연결, "준비 중" 화면 표시
+    (내용은 추후 결정, 섹션을 추가할 자리를 주석으로 표시해 둠)
+  - 로그인 유지: apps/web/src/store/store.ts 가 로그인 정보를
+    sessionStorage 에 보관
+    -> 새로고침해도 로그인 유지, 브라우저 탭을 닫으면 지워짐
+
+
+4. 커밋 전에 확인할 점
+------------------------------------------------------------
+
+  - 아직 커밋하지 않았습니다.
+    Index.tsx -> Logs.tsx 이름 변경만 스테이징되어 있습니다.
+
+  - 아래 파일은 이번 프론트엔드 작업에서 수정한 것이 아닙니다.
+      apps/api/logplus-colab.env   (10/10 수정)
+      apps/api/train_logplus.sh    (10/17 15:47 생성)
+      apps/api/LoginUser.py        (10/17 16:08 수정, 회원 탈퇴 API /user/delUser 추가)
+
+  - apps/api/LoginUser.py 의 /user/delUser 확인 필요:
+    마지막 return {"status": "success", ...} 이 비밀번호 확인 if 블록 안쪽으로
+    들여쓰기되어 있어서, 비밀번호가 맞으면 이 줄에 도달하지 못하고
+    빈 응답(null)이 반환됩니다.
+
+  - 사용하지 않는 파일이 남아 있습니다: apps/web/src/pages/css/user.css
