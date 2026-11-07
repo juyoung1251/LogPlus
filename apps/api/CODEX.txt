@@ -1,0 +1,46 @@
+# 프로젝트 진행 상태
+
+프로젝트 경로: /app/logplus-platform/apps/api
+마지막 업데이트: 2026-10-29T00:57:22+09:00
+현재 목표: test2_project/test2 QLoRA 1회 제출 및 최종 결과 보관.
+현재 상태: --submit 1회 완료. 중복 방지로 기존 실패 작업 반환; 새 학습 미시작. 실패 결과 수집/검증 완료.
+
+완료된 작업:
+- 로컬 스크립트 존재 확인. 추가 SSH 미사용.
+- TRAIN_TEAM_ID=test2_project 확인, TRAIN_USER_ID를 빈 값에서 test2로 한정.
+- 기존 env 인증 health HTTP 200: ready, gpu_busy=false, worker_busy=false, automatic_promotion=false.
+- job_id: job_416e9413274c433897a7dde2a39394b2; 최종 failed, restore_ok=true.
+- 조회 63 / 후보 62 / 형식 제외 1. 작업 검증 통과 60 / 의미 검증 제외 2.
+- worker.log의 실제 데이터 분할 train=48/eval=12. train은 0/6 단계에서 실패; 어댑터 없음.
+- result.zip 25,815바이트: 원격 크기/SHA256 일치, ZIP CRC 정상.
+- result.zip SHA256: 376a3d01cacf00a613bde205d676eca1c07e71e2961deab3155d287dbdb3e67f
+
+이번 작업에서 변경한 파일:
+- train_logplus.sh: TRAIN_USER_ID 1줄만 수정.
+- CODEX.txt: 진행 기록 생성/갱신.
+- training-output/20261028T155609Z-681e49b1/: 후보, manifest, receipt.
+- training-output/job_416e9413274c433897a7dde2a39394b2/: last-status.json, result.zip,
+  state.json, manifest.json, worker-config.json, worker.log, artifact-index.json, SHA256SUMS.
+
+실행한 테스트와 결과:
+- bash -n train_logplus.sh: 통과.
+- --collect: failed를 확인하고 결과 확보; 학습 실패로 종료 코드 1.
+- bash /app/logplus-platform/apps/api/train_logplus.sh --submit: 정확히 1회, 종료 코드 1.
+- 제출은 동일 dataset/source/mode의 중복 방지 키로 기존 failed job 반환. 재제출 없음.
+- restore_ok=true는 학습 API 보고값. /api/tags 및 /api/ps는 404로 모델 목록 직접 확인 불가.
+- 기본 sandbox의 /app 접근 제한과 Git 소유권 예외는 권한 승인 및 명령 단위 예외로 확인.
+
+현재 알려진 문제:
+- worker.log: NotImplementedError: _amp_foreach_non_finite_check_and_unscale_cuda not implemented for BFloat16.
+- 기존 결과 폴더가 root 소유여서 logplus 권한 --collect는 PermissionError; 관리자 권한 수집 완료.
+- 이번 제출로 새 학습은 시작되지 않음. 성공 어댑터 미생성.
+
+다음 작업:
+- Colab 워커의 BF16/FP16 학습 오류 수정 여부 및 실패 작업의 재실행 정책 확인 후 별도 실행.
+
+주의사항:
+- 검증 기준(min_train=40/min_eval=10 등) 변경 금지.
+- Ollama 모델 교체/자동 승격 금지. 이번 작업에서 수행하지 않음.
+- 기존 env, DB, API, 로그인, 배포 설정 변경 금지. 비밀정보 출력/기록 금지.
+
+2026-11-06: Training archive naming updated. Preserved job_* originals; added KST date/status aliases for four completed ZIPs and latest/result.zip for the verified applied model. Patched train_logplus.sh collector and added organize_training_results.py. Nine Linux unit tests, collector mock integration, bash syntax and SHA256 checks passed. No training submitted or model replaced. Backup: train_logplus.sh.before-dated-20261106-232456.bak

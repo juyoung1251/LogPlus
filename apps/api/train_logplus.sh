@@ -5,7 +5,7 @@ umask 077
 
 # ===== 학습 대상: 보통 이 값만 바꾸면 됩니다 =====
 export TRAIN_TEAM_ID="test2_project"
-export TRAIN_USER_ID=""  # 빈 값이면 해당 팀 전체. 지정하면 그 사용자만 추출.
+export TRAIN_USER_ID="test2"  # 빈 값이면 해당 팀 전체. 지정하면 그 사용자만 추출.
 export TRAIN_MAX_ROWS=500
 
 # ===== DB 설정 =====
@@ -395,6 +395,19 @@ def collect_results(job_id, output_root):
                     download_artifact(session, url, headers, item, output)
                 (output / "last-status.json").write_text(dump_json(state) + "\n", encoding="utf-8")
                 failures = 0
+                # LOGPLUS_DATED_ARCHIVE_V1
+                if last_state in terminal and state.get("artifacts_ready") and (output / "result.zip").is_file():
+                    import runpy
+                    archive = runpy.run_path(str(HERE / "organize_training_results.py"))["archive_result"]
+                    active = None
+                    try:
+                        active_response = session.get(training_url().rsplit("/training/jobs", 1)[0] + "/models/active",
+                            headers=headers, timeout=(10, 10), allow_redirects=False)
+                        if active_response.status_code == 200:
+                            active = active_response.json()
+                    except (requests.RequestException, ValueError):
+                        pass
+                    archive(output, state, active)
                 if state.get("artifact_error"):
                     raise RuntimeError("Colab 결과 묶음 생성 실패. 이미 수신한 체크포인트를 확인하세요.")
                 if last_state == "interrupted":
@@ -403,7 +416,11 @@ def collect_results(job_id, output_root):
                     if last_state == "skipped":
                         print("데이터 부족/검증 기준 미충족으로 학습을 건너뛰었습니다. 상세 사유는 last-status.json에 저장했습니다.")
                     elif last_state == "adapter_ready":
-                        print("학습 어댑터를 서버에 보관했습니다. 기존 Ollama 모델은 자동 교체하지 않았습니다.")
+                        promotion = state.get("promotion") or state.get("result", {}).get("promotion", {})
+                        if promotion.get("status") == "applied":
+                            print("학습 결과 보관 및 새 모델 적용 완료:", promotion.get("model"))
+                        else:
+                            print("학습 결과 보관 완료. 모델 적용 상태는 /models/active에서 확인하세요.")
                     else:
                         raise RuntimeError("학습이 실패/중단되었습니다. 수집한 result.zip과 체크포인트를 확인하세요.")
                     return
