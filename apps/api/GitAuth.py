@@ -1,11 +1,11 @@
 import base64
 import binascii
-import secrets
 import re
 from typing import Optional, Tuple
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from database import UserTable, get_db
@@ -16,6 +16,22 @@ GIT_PATH_PATTERN = re.compile(
     r"^/git/([A-Za-z0-9][A-Za-z0-9._-]{0,99})/"
     r"([A-Za-z0-9][A-Za-z0-9._-]{0,99})\.git(?:/.*)?$"
 )
+
+# CreateUser.py와 같은 설정이어야 DB에 저장된 해시를 검증할 수 있다
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+)
+
+
+def _verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
+    if not hashed_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (ValueError, TypeError):
+        # 해시가 아닌 값(해시 도입 전에 평문으로 저장된 계정 등)은 인증 실패로 처리
+        return False
 
 
 def _read_basic_credentials(authorization: Optional[str]) -> Tuple[str, str]:
@@ -39,22 +55,23 @@ def _read_basic_credentials(authorization: Optional[str]) -> Tuple[str, str]:
     return users_id, password
 
 
-def _authorize_repository(
-    team_id: str, repo_users_id: str, authorization: Optional[str], db: Session
-) -> Response:
+def _authenticate_user(authorization: Optional[str], db: Session) -> UserTable:
     auth_users_id, password = _read_basic_credentials(authorization)
     user = db.query(UserTable).filter(UserTable.users_id == auth_users_id).first()
-
-    credentials_match = (
-        user is not None
-        and secrets.compare_digest(user.password, password)
-    )
-    if not credentials_match:
+    # DB에는 bcrypt 해시가 저장되므로 평문 비교가 아니라 verify로 검증한다
+    if user is None or not _verify_password(password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="아이디 또는 비밀번호가 올바르지 않습니다.",
             headers={"WWW-Authenticate": 'Basic realm="LogPlus Git"'},
         )
+    return user
+
+
+def _authorize_repository(
+    team_id: str, repo_users_id: str, authorization: Optional[str], db: Session
+) -> Response:
+    user = _authenticate_user(authorization, db)
 
     if user.users_id != repo_users_id or user.team_id != team_id:
         raise HTTPException(
@@ -63,18 +80,6 @@ def _authorize_repository(
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-def _authenticate_user(authorization: Optional[str], db: Session) -> UserTable:
-    auth_users_id, password = _read_basic_credentials(authorization)
-    user = db.query(UserTable).filter(UserTable.users_id == auth_users_id).first()
-    if user is None or not secrets.compare_digest(user.password, password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="아이디 또는 비밀번호가 올바르지 않습니다.",
-            headers={"WWW-Authenticate": 'Basic realm="LogPlus Git"'},
-        )
-    return user
 
 
 @router.get("/internal/git-auth/{team_id}/{repo_users_id}", status_code=204)

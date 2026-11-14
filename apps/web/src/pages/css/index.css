@@ -603,6 +603,13 @@
   letter-spacing: 0.3px;
 }
 
+/* AI 분석 응답시간 — 배지 옆에 눈에 띄지 않게 작고 흐리게 표시 */
+.ai-panel-elapsed {
+  font-size: 10px;
+  color: #546070;
+  font-variant-numeric: tabular-nums;
+}
+
 .ai-panel-body {
   flex: 1;
   min-height: 0;

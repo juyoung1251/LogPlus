@@ -91,17 +91,25 @@ else
 
     LANG_TYPE="unknown"
 
-    if [ -f "$PROJECT_DIR/requirements.txt" ] || find "$PROJECT_DIR" -maxdepth 1 -name "*.py" | grep -q .; then
+    # 순서가 우선순위다. apps/api/Dashboard.py 의 LANGUAGE_RULES 와 같은 조건을 유지한다.
+    # C/C++ 은 Makefile/CMakeLists.txt 만으로 판별하지 않고 실제 소스(.c/.cpp)가 있어야 한다.
+    has_src() { find "$PROJECT_DIR" -maxdepth 2 -not -path '*/.git/*' \( "$@" \) -print -quit | grep -q .; }
+
+    if [ -f "$PROJECT_DIR/requirements.txt" ] || [ -f "$PROJECT_DIR/pyproject.toml" ] ||
+       [ -f "$PROJECT_DIR/setup.py" ] || [ -f "$PROJECT_DIR/setup.cfg" ] || [ -f "$PROJECT_DIR/Pipfile" ] ||
+       has_src -name "*.py"; then
         LANG_TYPE="python"
     elif [ -f "$PROJECT_DIR/package.json" ]; then
         LANG_TYPE="nodejs"
     elif [ -f "$PROJECT_DIR/pom.xml" ]; then
         LANG_TYPE="java-maven"
-    elif [ -f "$PROJECT_DIR/build.gradle" ]; then
+    elif [ -f "$PROJECT_DIR/build.gradle" ] || [ -f "$PROJECT_DIR/build.gradle.kts" ]; then
         LANG_TYPE="java-gradle"
-    elif [ -f "$PROJECT_DIR/CMakeLists.txt" ] || find "$PROJECT_DIR" -maxdepth 1 -name "*.cpp" | grep -q .; then
+    elif [ -f "$PROJECT_DIR/CMakeLists.txt" ] && has_src -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" -o -name "*.c"; then
         LANG_TYPE="cpp"
-    elif [ -f "$PROJECT_DIR/Makefile" ] || find "$PROJECT_DIR" -maxdepth 1 -name "*.c" | grep -q .; then
+    elif find "$PROJECT_DIR" -maxdepth 1 -name "*.cpp" | grep -q .; then
+        LANG_TYPE="cpp"
+    elif find "$PROJECT_DIR" -maxdepth 1 -name "*.c" | grep -q .; then
         LANG_TYPE="c"
     fi
 

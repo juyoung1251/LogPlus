@@ -62,13 +62,10 @@ const Settings = () => {
   const [withdrawError, setWithdrawError] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
 
-  // alert는 확인을 누르거나 닫을 때까지 멈춰 있으므로, 그 다음 줄에서 로그인 페이지로 보낸다
+  // 비로그인 접근은 App.tsx의 RequireAuth가 팝업 없이 로그인 페이지로 보낸다.
+  // 여기서 alert를 띄우면 StrictMode에서 effect가 두 번 실행되어 팝업이 두 번 뜨므로 조용히 빠져나간다
   useEffect(() => {
-    if (!userInfo) {
-      alert("로그인이 필요합니다.");
-      navigate("/login", { replace: true });
-      return;
-    }
+    if (!userInfo) return;
 
     // 응답이 오기 전에 사용자가 바뀌면 늦게 온 결과는 버린다
     let cancelled = false;

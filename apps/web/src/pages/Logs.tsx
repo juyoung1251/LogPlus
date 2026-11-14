@@ -236,6 +236,8 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisId, setAnalysisId] = useState<number | null>(null);
+  // 마지막 AI 분석 요청의 응답시간(ms). 'AI Powered' 배지 옆에 작게 표시한다
+  const [aiElapsedMs, setAiElapsedMs] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   // 이전 빌드의 ERROR/WARN 줄 수. 어느 로그를 기준으로 비교한 값인지 함께 둔다
   const [prevStats, setPrevStats] = useState<
@@ -484,6 +486,8 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
     const targetLogId = selectedLog.build_log_id;
     setIsAnalyzing(true);
     setAiAnalysisVisible(true);
+    setAiElapsedMs(null);
+    const startedAt = performance.now();
     try {
       const response = await axios.post(AI_REANALYZE_URL, {
         users_id: currentUser.userId,
@@ -493,6 +497,7 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
       const data = response.data;
       // 분석하는 사이 다른 로그를 골랐다면 이 결과는 버린다
       if (currentLogIdRef.current !== targetLogId) return;
+      setAiElapsedMs(performance.now() - startedAt);
       if (!data || data.status === "fail") {
         alert(data?.message ?? "AI 분석에 실패했습니다.");
         return;
@@ -516,6 +521,7 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
   async function selectChange(value: string) {
     setAiAnalysis([]);
     setAnalysisId(null);
+    setAiElapsedMs(null);
 
     if (!value || value === "default") {
       currentLogIdRef.current = null;
@@ -847,6 +853,11 @@ const [activeFilters, setActiveFilters] = useState<LogLevel[]>([]);
                 <div className="ai-panel-header">
                   <span className="ai-panel-title">*분석, 해결법*(실시간)</span>
                   <span className="ai-panel-badge">AI Powered</span>
+                  {aiElapsedMs !== null && !isAnalyzing && (
+                    <span className="ai-panel-elapsed" title="AI 분석 응답시간">
+                      {(aiElapsedMs / 1000).toFixed(1)}s
+                    </span>
+                  )}
                 </div>
                 <div className="ai-panel-body">
                   <ul className="ai-panel-list">

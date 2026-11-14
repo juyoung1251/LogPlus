@@ -80,14 +80,24 @@ def _preprocess_log(log_content: str) -> str:
     기존 방식은 오류 라인을 모두 모은 뒤 마지막 부분만 잘라서,
     앞쪽에 있던 ConnectException 같은 근본 원인이 사라질 수 있었다.
     오류 종류별로 대표 라인과 짧은 앞뒤 문맥을 남긴다.
+
+    - Python Traceback 블록은 규칙보다 먼저 통째로 추출한다.
+    - 같은 시그니처는 버리지 않고 횟수를 세어 "(총 N회 발생)"으로 남긴다.
+    - 한 범주가 집계한 라인은 다른 범주에서 다시 집계하지 않고(global_seen),
+      이미 출력한 라인은 문맥으로 다시 출력하지 않는다(printed).
+
+    train_logplus.sh가 이 함수 노드만 AST로 떼어 실행하므로(re, MAX_LOG_CHARS만 주어짐)
+    보조 함수는 모두 이 함수 안에 둔다.
     """
     lines = log_content.splitlines()
     if not lines:
         return ""
 
     # 각 예외 종류에 별도 예산을 줘서 한 종류의 긴 스택트레이스가
-    # 다른 핵심 오류를 밀어내지 않게 한다. 합계는 6000자 이내다.
+    # 다른 핵심 오류를 밀어내지 않게 한다. 전체 합계는 아래 remaining으로 6000자 이내다.
+    # 순서가 곧 우선순위다: Java(기존 6개) → Python → C/C++ → 빌드 도구.
     rules = [
+        # ---- Java (기존 규칙, 변경 없음) ----
         (
             "연결 실패",
             re.compile(
@@ -140,6 +150,100 @@ def _preprocess_log(log_content: str) -> str:
             1,
             850,
         ),
+        # ---- Python ----
+        (
+            "Python 모듈 오류",
+            re.compile(
+                r"\b(?:ModuleNotFoundError|ImportError)\b|No module named",
+                re.IGNORECASE,
+            ),
+            2,
+            900,
+        ),
+        (
+            "Python 문법 오류",
+            re.compile(r"\b(?:SyntaxError|IndentationError|TabError)\b", re.IGNORECASE),
+            1,
+            750,
+        ),
+        (
+            "Python 런타임 오류",
+            re.compile(
+                r"\b(?:NameError|AttributeError|TypeError|ValueError|"
+                r"KeyError|IndexError)\b",
+                re.IGNORECASE,
+            ),
+            2,
+            1000,
+        ),
+        (
+            "Python 파일 오류",
+            re.compile(
+                r"\b(?:FileNotFoundError|PermissionError|IsADirectoryError)\b",
+                re.IGNORECASE,
+            ),
+            1,
+            650,
+        ),
+        # ---- C/C++ ----
+        (
+            "C/C++ 컴파일 오류",
+            re.compile(
+                r"\.(?:c|cc|cpp|cxx|h|hpp)(?::\d+){1,2}:\s*(?:fatal\s+)?error:",
+                re.IGNORECASE,
+            ),
+            2,
+            1000,
+        ),
+        (
+            "C/C++ 링커 오류",
+            re.compile(
+                r"undefined reference to|cannot find -l\S*|ld returned",
+                re.IGNORECASE,
+            ),
+            2,
+            900,
+        ),
+        (
+            "C/C++ 치명 오류",
+            re.compile(
+                r"fatal error:|segmentation fault|core dumped",
+                re.IGNORECASE,
+            ),
+            1,
+            750,
+        ),
+        # ---- 빌드 도구 ----
+        (
+            "Maven 빌드 실패",
+            re.compile(r"BUILD FAILURE|COMPILATION ERROR", re.IGNORECASE),
+            2,
+            700,
+        ),
+        (
+            "pip 설치 실패",
+            re.compile(
+                r"Could not find a version|No matching distribution",
+                re.IGNORECASE,
+            ),
+            1,
+            600,
+        ),
+        (
+            "make 빌드 실패",
+            re.compile(
+                r"make(?:\[\d+\])?: \*\*\* .*Error|recipe for target .* failed",
+                re.IGNORECASE,
+            ),
+            1,
+            600,
+        ),
+        (
+            "비정상 종료 코드",
+            re.compile(r"exit (?:code|status)[:=]?\s*[1-9]\d*", re.IGNORECASE),
+            1,
+            450,
+        ),
     ]
 
     def clip(text: str, limit: int) -> str:
@@ -158,59 +262,214 @@ def _preprocess_log(log_content: str) -> str:
         normalized = re.sub(r"\b[0-9a-f]{8,}\b|\b\d+\b", "<N>", lower)
         return f"{label}:{normalized[:180]}"
 
-    def event_block(index: int, budget: int) -> str:
-        block = [f"대표 오류 L{index + 1}: {clip(lines[index], 520)}"]
-        context_indexes = (
+    def context_of(index: int) -> list:
+        return (
             list(range(max(0, index - 2), index))
             + list(range(index + 1, min(len(lines), index + 4)))
         )
+
+    def event_block(index: int, budget: int, count: int = 1, skip=frozenset()) -> str:
+        # 횟수는 첫 줄에 둬서 예산으로 잘려도 남게 한다.
+        block = [f"대표 오류 L{index + 1} (총 {count}회 발생): {clip(lines[index], 520)}"]
+        context_indexes = [i for i in context_of(index) if i not in skip]
         if context_indexes:
             block.append("문맥:")
             block.extend(f"L{i + 1}: {clip(lines[i], 130)}" for i in context_indexes)
         return "\n".join(block)[:budget]
 
+    # global_seen: 어느 범주(또는 Traceback)가 이미 집계한 라인. 다른 범주에서 다시 집계하지 않는다.
+    # printed: 문맥으로 이미 출력한 라인. 문맥으로 다시 출력하지 않는다.
+    # 문맥으로만 보인 라인은 다른 범주의 대표 오류가 될 수 있다.
+    # 그렇지 않으면 "error handle is not set"처럼 독립된 오류가 앞 범주의 문맥에 묻혀 사라진다.
+    global_seen = set()
+    printed = set()
     sections = []
-    for label, pattern, max_events, char_budget in rules:
-        events = []
-        seen = set()
-        event_budget = max(1, char_budget // max_events)
+    remaining = MAX_LOG_CHARS
 
+    def add_section(text: str) -> None:
+        nonlocal remaining
+        separator = 2 if sections else 0
+        room = remaining - separator
+        if room < 120:
+            return
+        piece = text if len(text) <= room else text[:room]
+        sections.append(piece)
+        remaining -= separator + len(piece)
+
+    def _extract_python_traceback(max_blocks: int = 2, budget: int = 1800) -> str:
+        """Traceback (most recent call last): 부터 예외 라인까지 블록 단위로 보존한다."""
+        found = {}  # 예외 라인 시그니처 -> [시작, 끝, 횟수]
+        index = 0
+        while index < len(lines):
+            if "Traceback (most recent call last)" not in lines[index]:
+                index += 1
+                continue
+            start = index
+            limit = min(len(lines), start + 300)
+            end = limit - 1
+            # 프레임과 코드 줄은 들여쓰기돼 있다. 처음 나오는 들여쓰기 없는 줄이 예외 라인이다.
+            for j in range(start + 1, limit):
+                text = lines[j]
+                if not text.strip() or text[0] in " \t":
+                    continue
+                end = j
+                break
+            global_seen.update(range(start, end + 1))
+            key = signature("Python Traceback", lines[end])
+            if key in found:
+                found[key][2] += 1
+            else:
+                found[key] = [start, end, 1]
+            index = end + 1
+
+        if not found:
+            return ""
+
+        groups = list(found.values())
+        per_block = max(1, budget // max_blocks)
+        blocks = []
+        for start, end, count in groups[:max_blocks]:
+            frame_indexes = list(range(start + 1, end))
+            if len(frame_indexes) > 12:
+                omitted = len(frame_indexes) - 12
+                frames = (
+                    [clip(lines[i], 200) for i in frame_indexes[:2]]
+                    + [f"... (중간 {omitted}줄 생략)"]
+                    + [clip(lines[i], 200) for i in frame_indexes[-10:]]
+                )
+            else:
+                frames = [clip(lines[i], 200) for i in frame_indexes]
+            # 예외 라인을 프레임보다 먼저 둬서 예산으로 잘려도 남게 한다.
+            block = [
+                f"Traceback L{start + 1}-L{end + 1} (총 {count}회 발생)",
+                f"예외 L{end + 1}: {clip(lines[end], 520)}",
+                f"{clip(lines[start], 200)}",
+            ] + frames
+            blocks.append("\n".join(block)[:per_block])
+
+        text = "[Python Traceback]\n" + "\n---\n".join(blocks)
+        rest = groups[max_blocks:]
+        if rest:
+            text += (
+                f"\n(다른 Traceback {len(rest)}종, "
+                f"총 {sum(group[2] for group in rest)}회는 생략)"
+            )
+        return text
+
+    # 1) Python Traceback을 규칙보다 먼저 추출한다.
+    traceback_section = _extract_python_traceback()
+    if traceback_section:
+        add_section(traceback_section)
+
+    # 2) 범주별 규칙. 같은 시그니처는 버리지 않고 횟수를 센다.
+    for label, pattern, max_events, char_budget in rules:
+        seen = {}  # 시그니처 -> 발생 횟수 (삽입 순서 = 최초 발생 순서)
+        first_index = {}
+        matched = []
         for index, line in enumerate(lines):
-            if not pattern.search(line):
+            if index in global_seen or not pattern.search(line):
                 continue
             event_signature = signature(label, line)
-            if event_signature in seen:
-                continue
-            seen.add(event_signature)
-            events.append(event_block(index, event_budget))
-            if len(events) >= max_events:
-                break
+            seen[event_signature] = seen.get(event_signature, 0) + 1
+            first_index.setdefault(event_signature, index)
+            matched.append(index)
 
-        if events:
-            sections.append(f"[{label}]\n" + "\n---\n".join(events))
+        if not seen:
+            continue
+
+        # 이 범주가 집계한 라인은 다른 범주에서 다시 쓰지 않는다.
+        global_seen.update(matched)
+
+        event_budget = max(1, char_budget // max_events)
+        signatures = list(seen)
+        events = []
+        for event_signature in signatures[:max_events]:
+            index = first_index[event_signature]
+            skip = global_seen | printed
+            events.append(event_block(index, event_budget, seen[event_signature], skip))
+            printed.add(index)
+            printed.update(i for i in context_of(index) if i not in skip)
+
+        body = "\n---\n".join(events)
+        rest = signatures[max_events:]
+        if rest:
+            body += (
+                f"\n(같은 범주의 다른 유형 {len(rest)}종, "
+                f"총 {sum(seen[s] for s in rest)}회는 생략)"
+            )
+        add_section(f"[{label}]\n" + body)
 
     if sections:
         return "\n\n".join(sections)[:MAX_LOG_CHARS]
 
-    # 핵심 패턴이 없을 때만 일반 오류를 보조 정보로 사용한다.
+    # 3) 핵심 패턴이 없을 때만 일반 오류/경고를 보조 정보로 사용한다.
     shutdown_pattern = re.compile(
         r"shutdown|shutting down|graceful shutdown|"
         r"thread stopping as it is now interrupted",
         re.IGNORECASE,
     )
-    fallback = []
+    error_pattern = re.compile(
+        r"\|(CRITICAL|FATAL|SEVERE)\||\bERROR\b|\w*(?:Error|Exception)\b|"
+        r"\bFAIL(?:ED|URE)\b",
+        re.IGNORECASE,
+    )
+    warning_pattern = re.compile(r"\bWARN(?:ING)?\b", re.IGNORECASE)
+    build_end_pattern = re.compile(
+        r"BUILD FAIL(?:URE|ED)|Finished:\s*(?:FAILURE|UNSTABLE|ABORTED)|"
+        r"exit(?:ed)?\s+(?:with\s+)?(?:code|status)[:=]?\s*[1-9]\d*|"
+        r"ERROR: Job failed",
+        re.IGNORECASE,
+    )
+
+    # 빌드 종료 메시지는 보통 로그 끝에 있으므로 마지막 5개를 따로 보존한다.
+    build_end = [i for i, line in enumerate(lines) if build_end_pattern.search(line)][-5:]
+    build_end_set = set(build_end)
+
+    errors = {}  # 시그니처 -> [최초 라인, 횟수]
+    warnings = {}
     for index, line in enumerate(lines):
-        if shutdown_pattern.search(line):
+        if index in build_end_set or shutdown_pattern.search(line):
             continue
-        if re.search(r"\|(CRITICAL|FATAL|SEVERE)\||\bERROR\b", line, re.IGNORECASE):
-            fallback.append(f"L{index + 1}: {clip(line, 420)}")
-            if len(fallback) >= 40:
-                break
+        if error_pattern.search(line):
+            bucket, label = errors, "오류"
+        elif warning_pattern.search(line):
+            bucket, label = warnings, "경고"
+        else:
+            continue
+        key = signature(label, line)
+        if key in bucket:
+            bucket[key][1] += 1
+        else:
+            bucket[key] = [index, 1]
 
-    if fallback:
-        return "\n".join(fallback)[:MAX_LOG_CHARS]
+    # 오류를 먼저 채우고, 남는 자리를 경고로 채운다. 합계 최대 60줄.
+    picked_errors = list(errors.values())[:60]
+    picked_warnings = list(warnings.values())[: 60 - len(picked_errors)]
 
-    return "\n".join(lines[-40:])[:MAX_LOG_CHARS]
+    def fallback_lines(entries) -> str:
+        return "\n".join(
+            f"L{index + 1} (총 {count}회 발생): {clip(lines[index], 420)}"
+            for index, count in entries
+        )
+
+    fallback = []
+    if build_end:
+        fallback.append(
+            "[빌드 종료]\n"
+            + "\n".join(f"L{i + 1}: {clip(lines[i], 300)}" for i in build_end)
+        )
+    if picked_errors:
+        fallback.append("[오류 라인]\n" + fallback_lines(picked_errors))
+    if picked_warnings:
+        fallback.append("[경고 라인]\n" + fallback_lines(picked_warnings))
+
+    if not picked_errors and not picked_warnings:
+        tail = "\n".join(lines[-60:])
+        if not build_end:
+            return tail[:MAX_LOG_CHARS]
+        fallback.append("[마지막 60줄]\n" + tail)
+
+    return "\n\n".join(fallback)[:MAX_LOG_CHARS]
 
 
 def _korean_ratio(text: str) -> float:
